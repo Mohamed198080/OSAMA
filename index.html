@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>مدير النظام - إدارة المخالفات</title>
+    <title>مدير النظام - التوزيع والمراقبة</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -18,7 +18,6 @@
         .upload-form { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         button { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
         .stats-cards { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .card { background: white; border-radius: 12px; padding: 15px; flex: 1; text-align: center; min-width: 80px; }
         .map-container { height: 400px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ddd; position: relative; }
@@ -52,17 +51,13 @@
         .column-selector label { font-weight: bold; min-width: 100px; }
         .column-selector select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; min-width: 150px; }
         .column-selector .extra-cols { margin-top: 10px; font-size: 14px; color: #555; }
-        .image-section { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
-        .image-section .image-inputs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
-        .image-section .image-inputs .form-group { flex: 1; min-width: 120px; }
-        .popup-images { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-        .popup-images img { max-width: 80px; max-height: 80px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
+        .upload-area .file-info { font-size: 14px; color: #27ae60; margin-top: 5px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1>📊 مدير التوزيع الجغرافي</h1>
+        <h1>📊 مدير التوزيع الجغرافي - مراقبة الفرق</h1>
         <div class="header-buttons">
             <button onclick="refreshData()">🔄 تحديث</button>
             <button onclick="exportToExcel()" style="background:#27ae60;">📎 Excel</button>
@@ -75,20 +70,23 @@
     <div class="upload-area">
         <h3>🔄 استبدال كامل (أرشفة المنجز + توزيع جديد)</h3>
         <div class="upload-form">
-            <div class="form-group"><label>ملف CSV/Excel:</label><input type="file" id="fullCsvFile" accept=".csv,.xlsx" onchange="analyzeFullFile(this)"></div>
-            <div class="form-group"><label>ملف KML:</label><input type="file" id="fullKmlFile" accept=".kml"></div>
-            <div class="swap-check"><label>🔄 تبديل إحداثيات KML</label><input type="checkbox" id="swapCoords"></div>
-        </div>
-        <div id="fullColumnSelector" class="column-selector"></div>
-        <div class="image-section">
-            <label style="font-weight:bold;">📸 صور (اختياري - 3 صور كحد أقصى):</label>
-            <div class="image-inputs">
-                <div class="form-group"><label>صورة 1:</label><input type="file" accept="image/*" id="fullImage1"></div>
-                <div class="form-group"><label>صورة 2:</label><input type="file" accept="image/*" id="fullImage2"></div>
-                <div class="form-group"><label>صورة 3:</label><input type="file" accept="image/*" id="fullImage3"></div>
+            <div class="form-group">
+                <label>ملف CSV/Excel (عدادات جديدة):</label>
+                <input type="file" id="fullCsvFile" accept=".csv,.xlsx" onchange="analyzeFullFile(this)">
+            </div>
+            <div class="form-group">
+                <label>ملف KML (مناطق):</label>
+                <input type="file" id="fullKmlFile" accept=".kml">
+            </div>
+            <div class="swap-check">
+                <label>🔄 تبديل إحداثيات KML</label>
+                <input type="checkbox" id="swapCoords">
             </div>
         </div>
-        <button onclick="fullReplace()" style="margin-top:10px; background:#8e44ad;">🚀 استبدال كامل</button>
+        <div id="fullColumnSelector" class="column-selector"></div>
+        <div style="margin-top:10px;">
+            <button onclick="fullReplace()" style="background:#8e44ad;">🚀 استبدال كامل</button>
+        </div>
         <div id="fullMsg" style="margin-top:10px;"></div>
     </div>
     
@@ -96,25 +94,22 @@
     <div class="upload-area">
         <h3>➕ إضافة عدادات جديدة (يُسمح بتكرار الرقم)</h3>
         <div class="upload-form">
-            <div class="form-group"><label>ملف CSV/Excel:</label><input type="file" id="appendCsvFile" accept=".csv,.xlsx" onchange="analyzeAppendFile(this)"></div>
-        </div>
-        <div id="appendColumnSelector" class="column-selector"></div>
-        <div class="image-section">
-            <label style="font-weight:bold;">📸 صور (اختياري - 3 صور كحد أقصى):</label>
-            <div class="image-inputs">
-                <div class="form-group"><label>صورة 1:</label><input type="file" accept="image/*" id="appendImage1"></div>
-                <div class="form-group"><label>صورة 2:</label><input type="file" accept="image/*" id="appendImage2"></div>
-                <div class="form-group"><label>صورة 3:</label><input type="file" accept="image/*" id="appendImage3"></div>
+            <div class="form-group">
+                <label>ملف CSV/Excel (عدادات جديدة):</label>
+                <input type="file" id="appendCsvFile" accept=".csv,.xlsx" onchange="analyzeAppendFile(this)">
             </div>
         </div>
-        <button onclick="appendOnly()" style="margin-top:10px; background:#27ae60;">➕ إضافة وتوزيع</button>
+        <div id="appendColumnSelector" class="column-selector"></div>
+        <div style="margin-top:10px;">
+            <button onclick="appendOnly()" style="background:#27ae60;">➕ إضافة وتوزيع</button>
+        </div>
         <div id="appendMsg" style="margin-top:10px;"></div>
     </div>
     
     <!-- البحث -->
     <div class="search-area">
         <h3>🔍 البحث عن تاريخ عداد</h3>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <div class="form-group"><label>رقم العداد:</label><input type="text" id="searchMeterId" placeholder="أدخل رقم العداد"></div>
             <button onclick="searchMeterHistory()" style="margin-top:6px;">🔍 بحث</button>
         </div>
@@ -153,20 +148,23 @@
         <table id="teamsTable"><thead><th>الفرقة</th><th>العدادات</th><th>تم</th><th>متبقي</th><th>الرابط</th></thead><tbody></tbody></table>
     </div>
     
-    <!-- سجل العمليات -->
     <div class="log-area" id="logArea">📋 سجل العمليات...</div>
     <div class="footer">✅ الروابط ثابتة | رقم العداد هو مفتاح الخريطة</div>
 </div>
 
 <script>
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwq9GpfD2BloEWSsK5FSoFRX7MYNDP45QBclZpf-XOhr7yCtpk5yjo5pyGjZWifF5JNRw/exec';
-    const IMGBB_API_KEY = '943880b0a24534cdb564d3ad6ea8f3a8';
     let map, markersLayer, polygonLayer, currentTileLayer = null;
     let currentLocationMarker = null, currentLocationCircle = null;
     let searchMap = null, searchMarker = null;
     let lastReportData = null;
     let columnOrder = [];
-    let fullFileData = null, appendFileData = null;
+    
+    // بيانات الملفات المؤقتة واختيارات الأعمدة
+    let fullFileData = null;
+    let appendFileData = null;
+    let fullSelectedColumns = null;
+    let appendSelectedColumns = null;
     
     // تعريف الأعمدة الأساسية
     const baseColumns = ['meterid', 'latitude', 'longitude', 'action'];
@@ -204,63 +202,57 @@
         return [...baseCols, ...remaining];
     }
     
-    // دوال رفع الصور
-    async function uploadImagesToImgBB(files) {
-        const uploadPromises = [];
-        for (let file of files) {
-            if (!file) continue;
-            const formData = new FormData();
-            formData.append('image', file);
-            const url = `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`;
-            const promise = fetch(url, { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) return data.data.url;
-                    else throw new Error('فشل رفع الصورة: ' + (data.error?.message || ''));
-                });
-            uploadPromises.push(promise);
-        }
-        return await Promise.all(uploadPromises);
-    }
-    
-    // تحليل الملفات وعرض اختيار الأعمدة
+    // دوال تحليل الملف وعرض اختيار الأعمدة
     function analyzeFile(file, selectorId, onDataReady) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            const data = e.target.result;
-            let headers = [];
-            const ext = file.name.split('.').pop().toLowerCase();
-            if (ext === 'csv') {
-                const text = data;
-                const lines = text.trim().split(/\r?\n/);
-                if (lines.length < 2) { alert('الملف فارغ'); return; }
-                const firstLine = lines[0];
-                const hasHeaders = !firstLine.match(/^[\d\.\,\"\s\-]+$/);
-                if (hasHeaders) {
-                    headers = firstLine.split(',').map(h => h.trim().replace(/["']/g, ''));
+            try {
+                const data = e.target.result;
+                let headers = [];
+                let rows = [];
+                const ext = file.name.split('.').pop().toLowerCase();
+                
+                if (ext === 'csv') {
+                    const text = data;
+                    const lines = text.trim().split(/\r?\n/);
+                    if (lines.length < 2) { alert('الملف فارغ'); return; }
+                    const firstLine = lines[0];
+                    const hasHeaders = !firstLine.match(/^[\d\.\,\"\s\-]+$/);
+                    if (hasHeaders) {
+                        headers = firstLine.split(',').map(h => h.trim().replace(/["']/g, ''));
+                    } else {
+                        const parts = lines[0].split(',').map(p => p.trim());
+                        headers = parts.map((_, i) => `عمود ${i+1}`);
+                    }
+                    rows = lines.slice(hasHeaders ? 1 : 0).map(line => line.split(',').map(c => c.trim()));
+                } else if (ext === 'xlsx') {
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+                    if (json.length < 2) { alert('الملف فارغ'); return; }
+                    const firstRow = json[0];
+                    const hasHeaders = firstRow.some(c => isNaN(parseFloat(c)) || c.toString().match(/[a-zA-Z\u0600-\u06FF]/));
+                    if (hasHeaders) {
+                        headers = firstRow.map(c => String(c).trim());
+                        rows = json.slice(1);
+                    } else {
+                        headers = firstRow.map((_, i) => `عمود ${i+1}`);
+                        rows = json;
+                    }
                 } else {
-                    const firstDataLine = lines[1] || lines[0];
-                    const parts = firstDataLine.split(',').map(p => p.trim());
-                    headers = parts.map((_, i) => `عمود ${i+1}`);
+                    alert('نوع ملف غير مدعوم');
+                    return;
                 }
-            } else if (ext === 'xlsx') {
-                const wb = XLSX.read(data, { type: 'array' });
-                const sheet = wb.Sheets[wb.SheetNames[0]];
-                const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-                if (json.length < 2) { alert('الملف فارغ'); return; }
-                const firstRow = json[0];
-                const hasHeaders = firstRow.some(c => isNaN(parseFloat(c)) || c.toString().match(/[a-zA-Z\u0600-\u06FF]/));
-                if (hasHeaders) {
-                    headers = firstRow.map(c => String(c).trim());
-                } else {
-                    headers = firstRow.map((_, i) => `عمود ${i+1}`);
-                }
-            } else { alert('نوع ملف غير مدعوم'); return; }
-            const fileData = { headers, rawData: data, ext, rows: ext === 'xlsx' ? json.slice(1) : [] };
-            onDataReady(fileData, selectorId);
+                const fileData = { headers, rows, rawData: data, ext };
+                onDataReady(fileData, selectorId);
+            } catch(err) {
+                alert('خطأ في قراءة الملف: ' + err.message);
+                console.error(err);
+            }
         };
         if (file.name.endsWith('.csv')) reader.readAsText(file, 'UTF-8');
-        else reader.readAsArrayBuffer(file);
+        else if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+        else { alert('امتداد غير مدعوم'); return; }
     }
     
     function renderColumnSelector(fileData, selectorId) {
@@ -288,7 +280,7 @@
             html += `</select></div>`;
         }
         const extraCols = headers.filter(h => !baseColumns.some(b => baseVariants[b].includes(h.toLowerCase().trim())));
-        html += `<div class="extra-cols">📂 الأعمدة الإضافية: ${extraCols.length ? extraCols.join('، ') : 'لا توجد'}</div>`;
+        html += `<div class="extra-cols">📂 الأعمدة الإضافية (سيتم تخزينها كبيانات إضافية): ${extraCols.length ? extraCols.join('، ') : 'لا توجد'}</div>`;
         html += `<div style="margin-top:15px;"><button onclick="confirmColumns('${selectorId}')" style="background:#27ae60;">✅ تأكيد الاختيار</button></div>`;
         container.innerHTML = html;
         container.classList.add('show');
@@ -296,8 +288,23 @@
         else if (selectorId === 'appendColumnSelector') appendFileData = fileData;
     }
     
-    function analyzeFullFile(input) { if (!input.files[0]) return; analyzeFile(input.files[0], 'fullColumnSelector', renderColumnSelector); }
-    function analyzeAppendFile(input) { if (!input.files[0]) return; analyzeFile(input.files[0], 'appendColumnSelector', renderColumnSelector); }
+    function analyzeFullFile(input) {
+        if (!input.files[0]) return;
+        const file = input.files[0];
+        fullFileData = null;
+        fullSelectedColumns = null;
+        document.getElementById('fullColumnSelector').classList.remove('show');
+        analyzeFile(file, 'fullColumnSelector', renderColumnSelector);
+    }
+    
+    function analyzeAppendFile(input) {
+        if (!input.files[0]) return;
+        const file = input.files[0];
+        appendFileData = null;
+        appendSelectedColumns = null;
+        document.getElementById('appendColumnSelector').classList.remove('show');
+        analyzeFile(file, 'appendColumnSelector', renderColumnSelector);
+    }
     
     function confirmColumns(selectorId) {
         const container = document.getElementById(selectorId);
@@ -314,14 +321,13 @@
         if (new Set(values).size !== values.length) { alert('لا يمكن اختيار نفس العمود لأكثر من حقل'); return; }
         if (selectorId === 'fullColumnSelector') {
             fullSelectedColumns = selected;
-            fullReplaceWithColumns(selected);
+            alert('✅ تم تأكيد اختيار الأعمدة. يمكنك الآن الضغط على "استبدال كامل".');
         } else if (selectorId === 'appendColumnSelector') {
             appendSelectedColumns = selected;
-            appendOnlyWithColumns(selected);
+            alert('✅ تم تأكيد اختيار الأعمدة. يمكنك الآن الضغط على "إضافة وتوزيع".');
         }
+        container.classList.remove('show'); // إخفاء بعد التأكيد
     }
-    
-    let fullSelectedColumns = null, appendSelectedColumns = null;
     
     function parseFileWithColumns(fileData, colMapping) {
         const headers = fileData.headers;
@@ -332,7 +338,7 @@
         for (let key of baseColumns) {
             const colName = colMapping[key];
             const index = headers.indexOf(colName);
-            if (index === -1) { alert(`العمود ${colName} غير موجود`); return null; }
+            if (index === -1) { alert(`العمود "${colName}" غير موجود في الملف`); return null; }
             idx[key] = index;
         }
         const extraIndices = {};
@@ -342,27 +348,12 @@
         }
         let dataRows = [];
         if (ext === 'csv') {
-            const text = fileData.rawData;
-            const lines = text.trim().split(/\r?\n/);
-            const firstLine = lines[0];
-            const hasHeaders = !firstLine.match(/^[\d\.\,\"\s\-]+$/);
-            const startIdx = hasHeaders ? 1 : 0;
-            for (let i=startIdx; i<lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                let parts = [], inQuote=false, cur='';
-                for (let ch of line) {
-                    if (ch === '"') inQuote = !inQuote;
-                    else if (ch === ',' && !inQuote) { parts.push(cur.trim()); cur=''; }
-                    else cur += ch;
-                }
-                parts.push(cur.trim());
-                dataRows.push(parts);
-            }
+            dataRows = rows;
         } else if (ext === 'xlsx') {
             dataRows = rows;
         }
         for (let row of dataRows) {
+            if (row.length < Math.max(idx.meterid, idx.latitude, idx.longitude) + 1) continue;
             const meterId = String(row[idx.meterid] || '').trim();
             const lat = parseFloat(row[idx.latitude]);
             const lng = parseFloat(row[idx.longitude]);
@@ -391,122 +382,128 @@
     }
     
     // دوال الرفع
-    async function fullReplaceWithColumns(colMapping) {
-        if (!fullFileData) { alert('لم يتم تحليل الملف بعد'); return; }
+    async function fullReplace() {
+        if (!fullSelectedColumns) { alert('يرجى أولاً اختيار ملف CSV/Excel وتأكيد اختيار الأعمدة.'); return; }
         const kmlFile = document.getElementById('fullKmlFile').files[0];
         if (!kmlFile) { alert('اختر ملف KML'); return; }
         const swap = document.getElementById('swapCoords').checked;
         const msgDiv = document.getElementById('fullMsg');
         msgDiv.innerHTML = '⏳ جاري أرشفة المنجز وتوزيع الجديد...';
         try {
-            const newMeters = parseFileWithColumns(fullFileData, colMapping);
+            const newMeters = parseFileWithColumns(fullFileData, fullSelectedColumns);
             if (!newMeters) throw new Error('فشل قراءة البيانات');
             if (!newMeters.length) throw new Error('لا توجد عدادات صالحة');
             const polygons = await parseKMLFile(kmlFile, swap);
-            if (!polygons.length) throw new Error('لا توجد مضلعات');
+            if (!polygons.length) throw new Error('لا توجد مضلعات صالحة');
             const { teams, meters: assigned } = assignMetersToTeams(newMeters, polygons);
             
-            // رفع الصور
-            const imageInputs = ['fullImage1', 'fullImage2', 'fullImage3'];
-            const imageFiles = imageInputs.map(id => document.getElementById(id).files[0]).filter(f => f);
-            let imageLinks = [];
-            if (imageFiles.length) {
-                try { imageLinks = await uploadImagesToImgBB(imageFiles); } catch(e) { alert('فشل رفع الصور: ' + e.message); return; }
-            }
-            const imageLinksStr = imageLinks.join(',');
-            
+            // ترتيب الأعمدة
             const headers = fullFileData.headers;
             const orderedCols = [];
-            for (let base of baseColumns) orderedCols.push(colMapping[base]);
+            for (let base of baseColumns) orderedCols.push(fullSelectedColumns[base]);
             for (let h of headers) {
-                if (!Object.values(colMapping).includes(h) && !orderedCols.includes(h)) orderedCols.push(h);
+                if (!Object.values(fullSelectedColumns).includes(h) && !orderedCols.includes(h)) {
+                    orderedCols.push(h);
+                }
             }
+            
+            // إرسال البيانات (بدون صور)
             const payload = new URLSearchParams({
                 action: 'uploadNewData',
                 metersJson: JSON.stringify(assigned),
                 teamsJson: JSON.stringify(teams),
-                columnOrder: JSON.stringify(orderedCols),
-                imageLinks: imageLinksStr
+                columnOrder: JSON.stringify(orderedCols)
             }).toString();
             const res = await fetch(SCRIPT_URL, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:payload });
             const result = await res.json();
-            if (result.success) { msgDiv.innerHTML = '✅ تم الاستبدال والأرشفة بنجاح'; refreshData(); }
-            else msgDiv.innerHTML = '❌ فشل الاستبدال';
-        } catch(err) { msgDiv.innerHTML = `❌ ${err.message}`; log(err.message); }
-        document.getElementById('fullColumnSelector').classList.remove('show');
+            if (result.success) {
+                msgDiv.innerHTML = '✅ تم الاستبدال والأرشفة بنجاح';
+                refreshData();
+                // إعادة تعيين الاختيارات
+                fullSelectedColumns = null;
+                fullFileData = null;
+                document.getElementById('fullColumnSelector').classList.remove('show');
+                document.getElementById('fullCsvFile').value = '';
+            } else {
+                msgDiv.innerHTML = '❌ فشل الاستبدال';
+            }
+        } catch(err) {
+            msgDiv.innerHTML = `❌ ${err.message}`;
+            log(err.message);
+        }
     }
     
-    async function appendOnlyWithColumns(colMapping) {
-        if (!appendFileData) { alert('لم يتم تحليل الملف بعد'); return; }
+    async function appendOnly() {
+        if (!appendSelectedColumns) { alert('يرجى أولاً اختيار ملف CSV/Excel وتأكيد اختيار الأعمدة.'); return; }
         const msgDiv = document.getElementById('appendMsg');
         msgDiv.innerHTML = '⏳ جاري إضافة العدادات الجديدة...';
         try {
-            const newMeters = parseFileWithColumns(appendFileData, colMapping);
+            const newMeters = parseFileWithColumns(appendFileData, appendSelectedColumns);
             if (!newMeters) throw new Error('فشل قراءة البيانات');
             if (!newMeters.length) throw new Error('لا توجد عدادات صالحة');
             
-            const imageInputs = ['appendImage1', 'appendImage2', 'appendImage3'];
-            const imageFiles = imageInputs.map(id => document.getElementById(id).files[0]).filter(f => f);
-            let imageLinks = [];
-            if (imageFiles.length) {
-                try { imageLinks = await uploadImagesToImgBB(imageFiles); } catch(e) { alert('فشل رفع الصور: ' + e.message); return; }
-            }
-            const imageLinksStr = imageLinks.join(',');
-            
             const headers = appendFileData.headers;
             const orderedCols = [];
-            for (let base of baseColumns) orderedCols.push(colMapping[base]);
+            for (let base of baseColumns) orderedCols.push(appendSelectedColumns[base]);
             for (let h of headers) {
-                if (!Object.values(colMapping).includes(h) && !orderedCols.includes(h)) orderedCols.push(h);
+                if (!Object.values(appendSelectedColumns).includes(h) && !orderedCols.includes(h)) {
+                    orderedCols.push(h);
+                }
             }
+            
             const payload = new URLSearchParams({
                 action: 'appendMeters',
                 metersJson: JSON.stringify(newMeters),
-                columnOrder: JSON.stringify(orderedCols),
-                imageLinks: imageLinksStr
+                columnOrder: JSON.stringify(orderedCols)
             }).toString();
             const res = await fetch(SCRIPT_URL, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:payload });
             const result = await res.json();
             if (result.addedCount !== undefined) {
                 msgDiv.innerHTML = `✅ تمت إضافة وتوزيع ${result.addedCount} عداد جديد`;
                 refreshData();
-            } else msgDiv.innerHTML = '❌ فشل الإضافة';
-        } catch(err) { msgDiv.innerHTML = `❌ ${err.message}`; log(err.message); }
-        document.getElementById('appendColumnSelector').classList.remove('show');
+                appendSelectedColumns = null;
+                appendFileData = null;
+                document.getElementById('appendColumnSelector').classList.remove('show');
+                document.getElementById('appendCsvFile').value = '';
+            } else {
+                msgDiv.innerHTML = '❌ فشل الإضافة';
+            }
+        } catch(err) {
+            msgDiv.innerHTML = `❌ ${err.message}`;
+            log(err.message);
+        }
     }
     
-    // الدوال الأصلية (لتكون متاحة للنقر)
-    async function fullReplace() { if (!fullSelectedColumns) { alert('يرجى اختيار الأعمدة أولاً'); return; } fullReplaceWithColumns(fullSelectedColumns); }
-    async function appendOnly() { if (!appendSelectedColumns) { alert('يرجى اختيار الأعمدة أولاً'); return; } appendOnlyWithColumns(appendSelectedColumns); }
-    
-    // دوال مساعدة
+    // دوال مساعدة (نفس السابق)
     async function parseKMLFile(file, swapCoords) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const xml = new DOMParser().parseFromString(e.target.result, 'text/xml');
-                const placemarks = xml.getElementsByTagName('Placemark');
-                let polygons = [];
-                for (let pm of placemarks) {
-                    let name = pm.getElementsByTagName('name')[0]?.textContent || 'منطقة';
-                    let coords = [];
-                    const polygonNode = pm.getElementsByTagName('Polygon')[0];
-                    if (polygonNode) {
-                        const coordStr = polygonNode.getElementsByTagName('coordinates')[0]?.textContent.trim();
-                        if (coordStr) coords = parseKMLCoords(coordStr, swapCoords);
-                    } else {
-                        const multi = pm.getElementsByTagName('MultiGeometry')[0];
-                        if (multi) {
-                            for (let p of multi.getElementsByTagName('Polygon')) {
-                                const cs = p.getElementsByTagName('coordinates')[0]?.textContent.trim();
-                                if (cs) coords.push(...parseKMLCoords(cs, swapCoords));
+                try {
+                    const xml = new DOMParser().parseFromString(e.target.result, 'text/xml');
+                    const placemarks = xml.getElementsByTagName('Placemark');
+                    let polygons = [];
+                    for (let pm of placemarks) {
+                        let name = pm.getElementsByTagName('name')[0]?.textContent || 'منطقة';
+                        let coords = [];
+                        const polygonNode = pm.getElementsByTagName('Polygon')[0];
+                        if (polygonNode) {
+                            const coordStr = polygonNode.getElementsByTagName('coordinates')[0]?.textContent.trim();
+                            if (coordStr) coords = parseKMLCoords(coordStr, swapCoords);
+                        } else {
+                            const multi = pm.getElementsByTagName('MultiGeometry')[0];
+                            if (multi) {
+                                for (let p of multi.getElementsByTagName('Polygon')) {
+                                    const cs = p.getElementsByTagName('coordinates')[0]?.textContent.trim();
+                                    if (cs) coords.push(...parseKMLCoords(cs, swapCoords));
+                                }
                             }
                         }
+                        if (coords.length) polygons.push({ name, coords });
                     }
-                    if (coords.length) polygons.push({ name, coords });
-                }
-                if (polygons.length === 0) reject(new Error('لا توجد مضلعات صالحة'));
-                resolve(polygons);
+                    if (polygons.length === 0) reject(new Error('لا توجد مضلعات صالحة'));
+                    resolve(polygons);
+                } catch(err) { reject(err); }
             };
             reader.onerror = () => reject(new Error('فشل قراءة KML'));
             reader.readAsText(file);
@@ -517,6 +514,7 @@
     function assignMetersToTeams(meters, polygons) { let teams = polygons.map((p,i) => ({ id: crypto.randomUUID(), token: Math.random().toString(36).substring(2,12), name: p.name || `الفرقة ${i+1}`, polygonCoords: p.coords, meterIds: [] })); let assigned=0; for (let m of meters) { m.violationNumber = ''; let found=false; for (let t of teams) { if (isPointInPolygon({lat:m.lat, lng:m.lng}, t.polygonCoords)) { t.meterIds.push(m.id); m.teamId=t.id; assigned++; found=true; break; } } if (!found) { let def = teams.find(t=>t.name==='خارج المناطق'); if (!def) { def = { id:crypto.randomUUID(), token:Math.random().toString(36).substring(2,12), name:'خارج المناطق', polygonCoords:[], meterIds:[] }; teams.push(def); } def.meterIds.push(m.id); m.teamId = def.id; } } teams = teams.filter(t=>t.meterIds.length>0); return { teams, meters }; }
     async function loadFromGoogleSheets() { try { const res = await fetch(`${SCRIPT_URL}?action=getManagerData`); if (!res.ok) throw new Error(`HTTP ${res.status}`); const data = await res.json(); if (data.columnOrder) columnOrder = data.columnOrder; return data; } catch(e) { log('⚠️ فشل التحميل: '+e.message); return null; } }
     
+    // باقي الدوال (التحديث، الخريطة، التصدير، البحث، إلخ)
     function getColorFromAction(action, status) { if (status === 'completed') return '#7f8c8d'; let hash = 0; for (let i=0; i<action.length; i++) hash = ((hash<<5)-hash)+action.charCodeAt(i); return `hsl(${Math.abs(hash%360)}, 70%, 55%)`; }
     
     const tileLayers = {
@@ -545,19 +543,8 @@
                 keys = [...orderedKeys, ...remainingKeys];
             }
             for (let k of keys) {
-                if (k === 'images') {
-                    const images = Array.isArray(meter.extra[k]) ? meter.extra[k] : 
-                                   (typeof meter.extra[k] === 'string' ? meter.extra[k].split(',').map(s => s.trim()).filter(s => s) : []);
-                    if (images.length) {
-                        extraHtml += '<div style="font-weight:bold;">📸 الصور:</div><div class="popup-images">';
-                        images.forEach(url => {
-                            extraHtml += `<a href="${url}" target="_blank"><img src="${url}" alt="صورة"></a>`;
-                        });
-                        extraHtml += '</div>';
-                    }
-                } else if (meter.extra[k]) {
-                    extraHtml += `<span style="font-weight:bold;">${k}:</span> ${meter.extra[k]}<br>`;
-                }
+                if (k === 'images') continue; // نعرض الصور في مكان منفصل إن أردنا
+                if (meter.extra[k]) extraHtml += `<span style="font-weight:bold;">${k}:</span> ${meter.extra[k]}<br>`;
             }
             extraHtml += '</div>';
         }
