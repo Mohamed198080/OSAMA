@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>مدير النظام - إدارة المخالفات</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .header h1 { font-size: 1.2rem; }
+        .header-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .upload-area, .search-area { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .upload-form { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        button { background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .stats-cards { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .card { background: white; border-radius: 12px; padding: 15px; flex: 1; text-align: center; min-width: 80px; }
+        .map-container { height: 400px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #ddd; position: relative; }
+        .teams-table { background: white; border-radius: 12px; overflow-x: auto; padding: 15px; margin-bottom: 20px; }
+        .history-table { background: white; border-radius: 12px; overflow-x: auto; padding: 15px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
+        th { background: #34495e; color: white; }
+        .team-link { background: #ecf0f1; padding: 4px 8px; border-radius: 20px; display: inline-block; text-decoration: none; color: #2c3e50; font-size: 12px; margin-left: 5px; }
+        .copy-btn { background: #27ae60; padding: 2px 6px; border-radius: 12px; font-size: 11px; cursor: pointer; color: white; display: inline-block; }
+        .completed { background: #2ecc71; color: white; padding: 2px 8px; border-radius: 20px; }
+        .pending { background: #e67e22; color: white; padding: 2px 8px; border-radius: 20px; }
+        .log-area { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 20px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .swap-check { display: flex; align-items: center; gap: 8px; }
+        .footer { text-align: center; margin-top: 30px; color: #7f8c8d; }
+        .balloon-marker { background: transparent; width: 36px; height: 36px; text-align: center; font-weight: bold; font-size: 12px; color: white; position: relative; }
+        .balloon-marker .pin { width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); position: absolute; top: 0; left: 2px; }
+        .balloon-marker .pin .number { transform: rotate(45deg); font-weight: bold; font-size: 11px; color: white; text-shadow: 0 0 1px black; }
+        .balloon-marker .pin::after { content: ''; position: absolute; bottom: -5px; left: 12px; width: 6px; height: 6px; background: rgba(255,255,255,0.8); border-radius: 50%; }
+        .layer-control { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.95); padding: 8px 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; display: flex; gap: 8px; direction: ltr; border: 1px solid #ddd; }
+        .layer-control button { background: #2c3e50; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .layer-control button.active { background: #3498db; }
+        .my-location-btn { position: absolute; bottom: 20px; right: 10px; background: #fff; padding: 8px 12px; border-radius: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; cursor: pointer; font-size: 14px; font-weight: bold; border: none; background-color: #3498db; color: white; display: flex; align-items: center; gap: 5px; }
+        .my-location-btn:hover { background-color: #2980b9; }
+        .current-location-marker { background: #4285F4; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+        .current-location-pulse { border-radius: 50%; width: 40px; height: 40px; background: rgba(66, 133, 244, 0.3); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+        .column-selector { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-top: 15px; display: none; }
+        .column-selector.show { display: block; }
+        .column-selector .row { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .column-selector label { font-weight: bold; min-width: 100px; }
+        .column-selector select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; min-width: 150px; }
+        .column-selector .extra-cols { margin-top: 10px; font-size: 14px; color: #555; }
+        .image-section { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
+        .image-section .image-inputs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
+        .image-section .image-inputs .form-group { flex: 1; min-width: 120px; }
+        .popup-images { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .popup-images img { max-width: 80px; max-height: 80px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📊 مدير التوزيع الجغرافي</h1>
+        <div class="header-buttons">
+            <button onclick="refreshData()">🔄 تحديث</button>
+            <button onclick="exportToExcel()" style="background:#27ae60;">📎 Excel</button>
+            <button onclick="refreshAllTokens()" style="background:#e67e22;">🔄 تجديد الروابط</button>
+            <button onclick="archiveCompleted()" style="background:#8e44ad;">📦 أرشفة المنجز</button>
+        </div>
+    </div>
+    
+    <!-- استبدال كامل -->
+    <div class="upload-area">
+        <h3>🔄 استبدال كامل (أرشفة المنجز + توزيع جديد)</h3>
+        <div class="upload-form">
+            <div class="form-group"><label>ملف CSV/Excel:</label><input type="file" id="fullCsvFile" accept=".csv,.xlsx" onchange="analyzeFullFile(this)"></div>
+            <div class="form-group"><label>ملف KML:</label><input type="file" id="fullKmlFile" accept=".kml"></div>
+            <div class="swap-check"><label>🔄 تبديل إحداثيات KML</label><input type="checkbox" id="swapCoords"></div>
+        </div>
+        <div id="fullColumnSelector" class="column-selector"></div>
+        <div class="image-section">
+            <label style="font-weight:bold;">📸 صور (اختياري - 3 صور كحد أقصى):</label>
+            <div class="image-inputs">
+                <div class="form-group"><label>صورة 1:</label><input type="file" accept="image/*" id="fullImage1"></div>
+                <div class="form-group"><label>صورة 2:</label><input type="file" accept="image/*" id="fullImage2"></div>
+                <div class="form-group"><label>صورة 3:</label><input type="file" accept="image/*" id="fullImage3"></div>
+            </div>
+        </div>
+        <button onclick="fullReplace()" style="margin-top:10px; background:#8e44ad;">🚀 استبدال كامل</button>
+        <div id="fullMsg" style="margin-top:10px;"></div>
+    </div>
+    
+    <!-- إضافة عدادات -->
+    <div class="upload-area">
+        <h3>➕ إضافة عدادات جديدة (يُسمح بتكرار الرقم)</h3>
+        <div class="upload-form">
+            <div class="form-group"><label>ملف CSV/Excel:</label><input type="file" id="appendCsvFile" accept=".csv,.xlsx" onchange="analyzeAppendFile(this)"></div>
+        </div>
+        <div id="appendColumnSelector" class="column-selector"></div>
+        <div class="image-section">
+            <label style="font-weight:bold;">📸 صور (اختياري - 3 صور كحد أقصى):</label>
+            <div class="image-inputs">
+                <div class="form-group"><label>صورة 1:</label><input type="file" accept="image/*" id="appendImage1"></div>
+                <div class="form-group"><label>صورة 2:</label><input type="file" accept="image/*" id="appendImage2"></div>
+                <div class="form-group"><label>صورة 3:</label><input type="file" accept="image/*" id="appendImage3"></div>
+            </div>
+        </div>
+        <button onclick="appendOnly()" style="margin-top:10px; background:#27ae60;">➕ إضافة وتوزيع</button>
+        <div id="appendMsg" style="margin-top:10px;"></div>
+    </div>
+    
+    <!-- البحث -->
+    <div class="search-area">
+        <h3>🔍 البحث عن تاريخ عداد</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="form-group"><label>رقم العداد:</label><input type="text" id="searchMeterId" placeholder="أدخل رقم العداد"></div>
+            <button onclick="searchMeterHistory()" style="margin-top:6px;">🔍 بحث</button>
+        </div>
+        <div id="searchResult" style="margin-top:10px;"></div>
+        <div class="history-table" id="historyTable" style="display:none;"></div>
+        <div class="map-container" id="searchMap" style="height:300px; display:none;"></div>
+    </div>
+    
+    <!-- تقرير الأرشيف -->
+    <div class="upload-area">
+        <h3>📅 تقرير المنجز حسب الفترة</h3>
+        <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group"><label>من تاريخ:</label><input type="date" id="reportStartDate"></div>
+            <div class="form-group"><label>إلى تاريخ:</label><input type="date" id="reportEndDate"></div>
+            <button onclick="generateReport()" style="background:#8e44ad;">📊 استخراج التقرير</button>
+            <button onclick="exportReportToExcel()" style="background:#27ae60;" id="exportReportBtn" disabled>📎 تصدير Excel</button>
+        </div>
+        <div id="reportResult" style="margin-top:10px;"></div>
+        <div id="reportTableContainer" style="max-height:400px; overflow-y:auto; display:none; margin-top:10px;"></div>
+    </div>
+    
+    <!-- الإحصائيات والخريطة -->
+    <div class="stats-cards" id="statsCards"></div>
+    <div class="map-container" id="managerMap">
+        <div class="layer-control" id="layerControl">
+            <button data-layer="street" class="active">🗺️ عادي</button>
+            <button data-layer="satellite">🛰️ قمر صناعي</button>
+            <button data-layer="terrain">⛰️ تضاريس</button>
+        </div>
+        <button class="my-location-btn" id="myLocationBtn">📍 موقعي الحالي</button>
+    </div>
+    
+    <!-- الفرق -->
+    <div class="teams-table">
+        <h3>📋 الفرق والروابط</h3>
+        <table id="teamsTable"><thead><th>الفرقة</th><th>العدادات</th><th>تم</th><th>متبقي</th><th>الرابط</th></thead><tbody></tbody></table>
+    </div>
+    
+    <!-- سجل العمليات -->
+    <div class="log-area" id="logArea">📋 سجل العمليات...</div>
+    <div class="footer">✅ الروابط ثابتة | رقم العداد هو مفتاح الخريطة</div>
+</div>
+
+<script>
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwq9GpfD2BloEWSsK5FSoFRX7MYNDP45QBclZpf-XOhr7yCtpk5yjo5pyGjZWifF5JNRw/exec';
+    const IMGBB_API_KEY = '943880b0a24534cdb564d3ad6ea8f3a8';
+    let map, markersLayer, polygonLayer, currentTileLayer = null;
+    let currentLocationMarker = null, currentLocationCircle = null;
+    let searchMap = null, searchMarker = null;
+    let lastReportData = null;
+    let columnOrder = [];
+    let fullFileData = null, appendFileData = null;
+    
+    // تعريف الأعمدة الأساسية
+    const baseColumns = ['meterid', 'latitude', 'longitude', 'action'];
+    const baseVariants = {
+        'meterid': ['meterid', 'meter id', 'meter_id', 'رقم العداد'],
+        'latitude': ['latitude', 'lat', 'عرض'],
+        'longitude': ['longitude', 'lng', 'lon', 'طول'],
+        'action': ['action', 'الإجراء']
+    };
+    
+    function getBaseColumnName(col) {
+        const lower = col.toLowerCase().trim();
+        for (let base of baseColumns) {
+            if (baseVariants[base].some(v => lower === v)) return base;
+        }
+        return null;
+    }
+    
+    function ensureBaseColumnsFirst(order) {
+        let baseCols = [];
+        let remaining = [];
+        for (let col of order) {
+            const base = getBaseColumnName(col);
+            if (base && !baseCols.some(b => getBaseColumnName(b) === base)) {
+                baseCols.push(col);
+            } else if (!base) {
+                remaining.push(col);
+            }
+        }
+        for (let base of baseColumns) {
+            if (!baseCols.some(b => getBaseColumnName(b) === base)) {
+                baseCols.push(base);
+            }
+        }
+        return [...baseCols, ...remaining];
+    }
+    
+    // دوال رفع الصور
+    async function uploadImagesToImgBB(files) {
+        const uploadPromises = [];
+        for (let file of files) {
+            if (!file) continue;
+            const formData = new FormData();
+            formData.append('image', file);
+            const url = `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`;
+            const promise = fetch(url, { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) return data.data.url;
+                    else throw new Error('فشل رفع الصورة: ' + (data.error?.message || ''));
+                });
+            uploadPromises.push(promise);
+        }
+        return await Promise.all(uploadPromises);
+    }
+    
+    // تحليل الملفات وعرض اختيار الأعمدة
+    function analyzeFile(file, selectorId, onDataReady) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = e.target.result;
+            let headers = [];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext === 'csv') {
+                const text = data;
+                const lines = text.trim().split(/\r?\n/);
+                if (lines.length < 2) { alert('الملف فارغ'); return; }
+                const firstLine = lines[0];
+                const hasHeaders = !firstLine.match(/^[\d\.\,\"\s\-]+$/);
+                if (hasHeaders) {
+                    headers = firstLine.split(',').map(h => h.trim().replace(/["']/g, ''));
+                } else {
+                    const firstDataLine = lines[1] || lines[0];
+                    const parts = firstDataLine.split(',').map(p => p.trim());
+                    headers = parts.map((_, i) => `عمود ${i+1}`);
+                }
+            } else if (ext === 'xlsx') {
+                const wb = XLSX.read(data, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+                if (json.length < 2) { alert('الملف فارغ'); return; }
+                const firstRow = json[0];
+                const hasHeaders = firstRow.some(c => isNaN(parseFloat(c)) || c.toString().match(/[a-zA-Z\u0600-\u06FF]/));
+                if (hasHeaders) {
+                    headers = firstRow.map(c => String(c).trim());
+                } else {
+                    headers = firstRow.map((_, i) => `عمود ${i+1}`);
+                }
+            } else { alert('نوع ملف غير مدعوم'); return; }
+            const fileData = { headers, rawData: data, ext, rows: ext === 'xlsx' ? json.slice(1) : [] };
+            onDataReady(fileData, selectorId);
+        };
+        if (file.name.endsWith('.csv')) reader.readAsText(file, 'UTF-8');
+        else reader.readAsArrayBuffer(file);
+    }
+    
+    function renderColumnSelector(fileData, selectorId) {
+        const container = document.getElementById(selectorId);
+        const headers = fileData.headers;
+        if (!headers || headers.length === 0) {
+            container.innerHTML = '<div style="color:red;">لا توجد رؤوس أعمدة في الملف</div>';
+            container.classList.add('show');
+            return;
+        }
+        let html = `<div style="margin-bottom:10px;font-weight:bold;">🔧 اختر الأعمدة الأساسية:</div>`;
+        const fieldLabels = {
+            'meterid': '📌 رقم العداد (meterid)',
+            'latitude': '🌐 خط العرض (latitude)',
+            'longitude': '🌐 خط الطول (longitude)',
+            'action': '⚙️ الإجراء (action)'
+        };
+        for (let field of baseColumns) {
+            html += `<div class="row"><label>${fieldLabels[field]}:</label><select id="${selectorId}_${field}">`;
+            html += `<option value="">-- اختر العمود --</option>`;
+            for (let h of headers) {
+                const selected = (h.toLowerCase().trim() === field || baseVariants[field].includes(h.toLowerCase().trim())) ? 'selected' : '';
+                html += `<option value="${h}" ${selected}>${h}</option>`;
+            }
+            html += `</select></div>`;
+        }
+        const extraCols = headers.filter(h => !baseColumns.some(b => baseVariants[b].includes(h.toLowerCase().trim())));
+        html += `<div class="extra-cols">📂 الأعمدة الإضافية: ${extraCols.length ? extraCols.join('، ') : 'لا توجد'}</div>`;
+        html += `<div style="margin-top:15px;"><button onclick="confirmColumns('${selectorId}')" style="background:#27ae60;">✅ تأكيد الاختيار</button></div>`;
+        container.innerHTML = html;
+        container.classList.add('show');
+        if (selectorId === 'fullColumnSelector') fullFileData = fileData;
+        else if (selectorId === 'appendColumnSelector') appendFileData = fileData;
+    }
+    
+    function analyzeFullFile(input) { if (!input.files[0]) return; analyzeFile(input.files[0], 'fullColumnSelector', renderColumnSelector); }
+    function analyzeAppendFile(input) { if (!input.files[0]) return; analyzeFile(input.files[0], 'appendColumnSelector', renderColumnSelector); }
+    
+    function confirmColumns(selectorId) {
+        const container = document.getElementById(selectorId);
+        const selects = container.querySelectorAll('select');
+        const selected = {};
+        for (let sel of selects) {
+            const field = sel.id.split('_')[1];
+            selected[field] = sel.value;
+        }
+        for (let f of baseColumns) {
+            if (!selected[f]) { alert(`يرجى اختيار عمود لـ ${f}`); return; }
+        }
+        const values = Object.values(selected);
+        if (new Set(values).size !== values.length) { alert('لا يمكن اختيار نفس العمود لأكثر من حقل'); return; }
+        if (selectorId === 'fullColumnSelector') {
+            fullSelectedColumns = selected;
+            fullReplaceWithColumns(selected);
+        } else if (selectorId === 'appendColumnSelector') {
+            appendSelectedColumns = selected;
+            appendOnlyWithColumns(selected);
+        }
+    }
+    
+    let fullSelectedColumns = null, appendSelectedColumns = null;
+    
+    function parseFileWithColumns(fileData, colMapping) {
+        const headers = fileData.headers;
+        const rows = fileData.rows || [];
+        const ext = fileData.ext;
+        let meters = [];
+        const idx = {};
+        for (let key of baseColumns) {
+            const colName = colMapping[key];
+            const index = headers.indexOf(colName);
+            if (index === -1) { alert(`العمود ${colName} غير موجود`); return null; }
+            idx[key] = index;
+        }
+        const extraIndices = {};
+        for (let i=0; i<headers.length; i++) {
+            const h = headers[i];
+            if (!Object.values(colMapping).includes(h)) extraIndices[i] = h;
+        }
+        let dataRows = [];
+        if (ext === 'csv') {
+            const text = fileData.rawData;
+            const lines = text.trim().split(/\r?\n/);
+            const firstLine = lines[0];
+            const hasHeaders = !firstLine.match(/^[\d\.\,\"\s\-]+$/);
+            const startIdx = hasHeaders ? 1 : 0;
+            for (let i=startIdx; i<lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                let parts = [], inQuote=false, cur='';
+                for (let ch of line) {
+                    if (ch === '"') inQuote = !inQuote;
+                    else if (ch === ',' && !inQuote) { parts.push(cur.trim()); cur=''; }
+                    else cur += ch;
+                }
+                parts.push(cur.trim());
+                dataRows.push(parts);
+            }
+        } else if (ext === 'xlsx') {
+            dataRows = rows;
+        }
+        for (let row of dataRows) {
+            const meterId = String(row[idx.meterid] || '').trim();
+            const lat = parseFloat(row[idx.latitude]);
+            const lng = parseFloat(row[idx.longitude]);
+            const action = String(row[idx.action] || '').trim();
+            if (meterId && !isNaN(lat) && !isNaN(lng)) {
+                let extra = {};
+                for (let [i, h] of Object.entries(extraIndices)) {
+                    const val = row[parseInt(i)] !== undefined ? String(row[parseInt(i)]).trim() : '';
+                    if (val) extra[h] = val;
+                }
+                meters.push({
+                    id: crypto.randomUUID(),
+                    meterId: meterId,
+                    lat: lat,
+                    lng: lng,
+                    action: action || 'unknown',
+                    status: 'pending',
+                    completedAt: null,
+                    teamId: null,
+                    violationNumber: '',
+                    extra: extra
+                });
+            }
+        }
+        return meters;
+    }
+    
+    // دوال الرفع
+    async function fullReplaceWithColumns(colMapping) {
+        if (!fullFileData) { alert('لم يتم تحليل الملف بعد'); return; }
+        const kmlFile = document.getElementById('fullKmlFile').files[0];
+        if (!kmlFile) { alert('اختر ملف KML'); return; }
+        const swap = document.getElementById('swapCoords').checked;
+        const msgDiv = document.getElementById('fullMsg');
+        msgDiv.innerHTML = '⏳ جاري أرشفة المنجز وتوزيع الجديد...';
+        try {
+            const newMeters = parseFileWithColumns(fullFileData, colMapping);
+            if (!newMeters) throw new Error('فشل قراءة البيانات');
+            if (!newMeters.length) throw new Error('لا توجد عدادات صالحة');
+            const polygons = await parseKMLFile(kmlFile, swap);
+            if (!polygons.length) throw new Error('لا توجد مضلعات');
+            const { teams, meters: assigned } = assignMetersToTeams(newMeters, polygons);
+            
+            // رفع الصور
+            const imageInputs = ['fullImage1', 'fullImage2', 'fullImage3'];
+            const imageFiles = imageInputs.map(id => document.getElementById(id).files[0]).filter(f => f);
+            let imageLinks = [];
+            if (imageFiles.length) {
+                try { imageLinks = await uploadImagesToImgBB(imageFiles); } catch(e) { alert('فشل رفع الصور: ' + e.message); return; }
+            }
+            const imageLinksStr = imageLinks.join(',');
+            
+            const headers = fullFileData.headers;
+            const orderedCols = [];
+            for (let base of baseColumns) orderedCols.push(colMapping[base]);
+            for (let h of headers) {
+                if (!Object.values(colMapping).includes(h) && !orderedCols.includes(h)) orderedCols.push(h);
+            }
+            const payload = new URLSearchParams({
+                action: 'uploadNewData',
+                metersJson: JSON.stringify(assigned),
+                teamsJson: JSON.stringify(teams),
+                columnOrder: JSON.stringify(orderedCols),
+                imageLinks: imageLinksStr
+            }).toString();
+            const res = await fetch(SCRIPT_URL, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:payload });
+            const result = await res.json();
+            if (result.success) { msgDiv.innerHTML = '✅ تم الاستبدال والأرشفة بنجاح'; refreshData(); }
+            else msgDiv.innerHTML = '❌ فشل الاستبدال';
+        } catch(err) { msgDiv.innerHTML = `❌ ${err.message}`; log(err.message); }
+        document.getElementById('fullColumnSelector').classList.remove('show');
+    }
+    
+    async function appendOnlyWithColumns(colMapping) {
+        if (!appendFileData) { alert('لم يتم تحليل الملف بعد'); return; }
+        const msgDiv = document.getElementById('appendMsg');
+        msgDiv.innerHTML = '⏳ جاري إضافة العدادات الجديدة...';
+        try {
+            const newMeters = parseFileWithColumns(appendFileData, colMapping);
+            if (!newMeters) throw new Error('فشل قراءة البيانات');
+            if (!newMeters.length) throw new Error('لا توجد عدادات صالحة');
+            
+            const imageInputs = ['appendImage1', 'appendImage2', 'appendImage3'];
+            const imageFiles = imageInputs.map(id => document.getElementById(id).files[0]).filter(f => f);
+            let imageLinks = [];
+            if (imageFiles.length) {
+                try { imageLinks = await uploadImagesToImgBB(imageFiles); } catch(e) { alert('فشل رفع الصور: ' + e.message); return; }
+            }
+            const imageLinksStr = imageLinks.join(',');
+            
+            const headers = appendFileData.headers;
+            const orderedCols = [];
+            for (let base of baseColumns) orderedCols.push(colMapping[base]);
+            for (let h of headers) {
+                if (!Object.values(colMapping).includes(h) && !orderedCols.includes(h)) orderedCols.push(h);
+            }
+            const payload = new URLSearchParams({
+                action: 'appendMeters',
+                metersJson: JSON.stringify(newMeters),
+                columnOrder: JSON.stringify(orderedCols),
+                imageLinks: imageLinksStr
+            }).toString();
+            const res = await fetch(SCRIPT_URL, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:payload });
+            const result = await res.json();
+            if (result.addedCount !== undefined) {
+                msgDiv.innerHTML = `✅ تمت إضافة وتوزيع ${result.addedCount} عداد جديد`;
+                refreshData();
+            } else msgDiv.innerHTML = '❌ فشل الإضافة';
+        } catch(err) { msgDiv.innerHTML = `❌ ${err.message}`; log(err.message); }
+        document.getElementById('appendColumnSelector').classList.remove('show');
+    }
+    
+    // الدوال الأصلية (لتكون متاحة للنقر)
+    async function fullReplace() { if (!fullSelectedColumns) { alert('يرجى اختيار الأعمدة أولاً'); return; } fullReplaceWithColumns(fullSelectedColumns); }
+    async function appendOnly() { if (!appendSelectedColumns) { alert('يرجى اختيار الأعمدة أولاً'); return; } appendOnlyWithColumns(appendSelectedColumns); }
+    
+    // دوال مساعدة
+    async function parseKMLFile(file, swapCoords) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const xml = new DOMParser().parseFromString(e.target.result, 'text/xml');
+                const placemarks = xml.getElementsByTagName('Placemark');
+                let polygons = [];
+                for (let pm of placemarks) {
+                    let name = pm.getElementsByTagName('name')[0]?.textContent || 'منطقة';
+                    let coords = [];
+                    const polygonNode = pm.getElementsByTagName('Polygon')[0];
+                    if (polygonNode) {
+                        const coordStr = polygonNode.getElementsByTagName('coordinates')[0]?.textContent.trim();
+                        if (coordStr) coords = parseKMLCoords(coordStr, swapCoords);
+                    } else {
+                        const multi = pm.getElementsByTagName('MultiGeometry')[0];
+                        if (multi) {
+                            for (let p of multi.getElementsByTagName('Polygon')) {
+                                const cs = p.getElementsByTagName('coordinates')[0]?.textContent.trim();
+                                if (cs) coords.push(...parseKMLCoords(cs, swapCoords));
+                            }
+                        }
+                    }
+                    if (coords.length) polygons.push({ name, coords });
+                }
+                if (polygons.length === 0) reject(new Error('لا توجد مضلعات صالحة'));
+                resolve(polygons);
+            };
+            reader.onerror = () => reject(new Error('فشل قراءة KML'));
+            reader.readAsText(file);
+        });
+    }
+    function parseKMLCoords(coordStr, swap) { return coordStr.trim().split(/\s+/).map(p => { let [lng, lat] = p.split(',').map(Number); if (swap)[lat, lng] = [lng, lat]; return { lat, lng }; }).filter(p => !isNaN(p.lat) && !isNaN(p.lng)); }
+    function isPointInPolygon(point, polygon) { let x=point.lng, y=point.lat, inside=false; for (let i=0,j=polygon.length-1; i<polygon.length; j=i++) { let xi=polygon[i].lng, yi=polygon[i].lat, xj=polygon[j].lng, yj=polygon[j].lat; let intersect = ((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi); if (intersect) inside=!inside; } return inside; }
+    function assignMetersToTeams(meters, polygons) { let teams = polygons.map((p,i) => ({ id: crypto.randomUUID(), token: Math.random().toString(36).substring(2,12), name: p.name || `الفرقة ${i+1}`, polygonCoords: p.coords, meterIds: [] })); let assigned=0; for (let m of meters) { m.violationNumber = ''; let found=false; for (let t of teams) { if (isPointInPolygon({lat:m.lat, lng:m.lng}, t.polygonCoords)) { t.meterIds.push(m.id); m.teamId=t.id; assigned++; found=true; break; } } if (!found) { let def = teams.find(t=>t.name==='خارج المناطق'); if (!def) { def = { id:crypto.randomUUID(), token:Math.random().toString(36).substring(2,12), name:'خارج المناطق', polygonCoords:[], meterIds:[] }; teams.push(def); } def.meterIds.push(m.id); m.teamId = def.id; } } teams = teams.filter(t=>t.meterIds.length>0); return { teams, meters }; }
+    async function loadFromGoogleSheets() { try { const res = await fetch(`${SCRIPT_URL}?action=getManagerData`); if (!res.ok) throw new Error(`HTTP ${res.status}`); const data = await res.json(); if (data.columnOrder) columnOrder = data.columnOrder; return data; } catch(e) { log('⚠️ فشل التحميل: '+e.message); return null; } }
+    
+    function getColorFromAction(action, status) { if (status === 'completed') return '#7f8c8d'; let hash = 0; for (let i=0; i<action.length; i++) hash = ((hash<<5)-hash)+action.charCodeAt(i); return `hsl(${Math.abs(hash%360)}, 70%, 55%)`; }
+    
+    const tileLayers = {
+        street: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '© OSM & CartoDB' }),
+        satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles Esri' }),
+        terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap' })
+    };
+    function switchLayer(layerName) { if (currentTileLayer) map.removeLayer(currentTileLayer); currentTileLayer = tileLayers[layerName]; currentTileLayer.addTo(map); document.querySelectorAll('.layer-control button').forEach(btn => { if (btn.dataset.layer === layerName) btn.classList.add('active'); else btn.classList.remove('active'); }); }
+    function showMyLocation() { if (!navigator.geolocation) { alert("المتصفح لا يدعم تحديد الموقع"); return; } navigator.geolocation.getCurrentPosition(pos => { const lat=pos.coords.latitude, lng=pos.coords.longitude; if(currentLocationMarker) map.removeLayer(currentLocationMarker); if(currentLocationCircle) map.removeLayer(currentLocationCircle); const icon = L.divIcon({className:'current-location-marker', iconSize:[16,16], popupAnchor:[0,-8]}); currentLocationMarker = L.marker([lat,lng],{icon:icon}).addTo(map).bindPopup("📍 أنت هنا").openPopup(); currentLocationCircle = L.circle([lat,lng], {radius:30, color:'#4285F4', fillColor:'#4285F4', fillOpacity:0.2, weight:1}).addTo(map); map.setView([lat,lng],15); }, err => alert(err.message), {enableHighAccuracy:true, timeout:10000}); }
+    function initMap() { map = L.map('managerMap').setView([27.545,41.712],12); currentTileLayer = tileLayers.street; currentTileLayer.addTo(map); markersLayer = L.layerGroup().addTo(map); polygonLayer = L.layerGroup().addTo(map); document.querySelectorAll('.layer-control button').forEach(btn => btn.addEventListener('click', () => switchLayer(btn.dataset.layer))); document.getElementById('myLocationBtn').addEventListener('click', showMyLocation); }
+    
+    function log(msg) { const logDiv = document.getElementById('logArea'); logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`; logDiv.scrollTop = logDiv.scrollHeight; console.log(msg); }
+    
+    function createBalloonIcon(meter) { const bgColor = (meter.status === 'completed') ? '#7f8c8d' : getColorFromAction(meter.action, meter.status); const html = `<div class="balloon-marker"><div class="pin" style="background-color: ${bgColor};"><div class="number">${meter.meterId.length > 4 ? meter.meterId.slice(0,4) : meter.meterId}</div></div></div>`; return L.divIcon({ className: 'balloon-marker-container', html: html, iconSize: [36,36], iconAnchor: [18,32], popupAnchor: [0,-32] }); }
+    
+    function buildPopupContent(meter) {
+        let actionText = meter.action || 'غير معروف';
+        let extraHtml = '';
+        if (meter.extra && Object.keys(meter.extra).length) {
+            extraHtml = '<hr><div style="text-align:right; font-size:11px;">📌 بيانات إضافية:<br>';
+            let keys = Object.keys(meter.extra);
+            if (columnOrder.length) {
+                const extraKeys = keys.filter(k => columnOrder.includes(k));
+                const orderedKeys = columnOrder.filter(k => extraKeys.includes(k));
+                const remainingKeys = keys.filter(k => !orderedKeys.includes(k));
+                keys = [...orderedKeys, ...remainingKeys];
+            }
+            for (let k of keys) {
+                if (k === 'images') {
+                    const images = Array.isArray(meter.extra[k]) ? meter.extra[k] : 
+                                   (typeof meter.extra[k] === 'string' ? meter.extra[k].split(',').map(s => s.trim()).filter(s => s) : []);
+                    if (images.length) {
+                        extraHtml += '<div style="font-weight:bold;">📸 الصور:</div><div class="popup-images">';
+                        images.forEach(url => {
+                            extraHtml += `<a href="${url}" target="_blank"><img src="${url}" alt="صورة"></a>`;
+                        });
+                        extraHtml += '</div>';
+                    }
+                } else if (meter.extra[k]) {
+                    extraHtml += `<span style="font-weight:bold;">${k}:</span> ${meter.extra[k]}<br>`;
+                }
+            }
+            extraHtml += '</div>';
+        }
+        return `<div style="text-align:center; min-width:200px;">
+                    <b>🚦 العداد: ${meter.meterId}</b><br>
+                    📋 الإجراء: ${actionText}<br>
+                    📍 الحالة: ${meter.status==='completed'?'✅ تم':'⏳ قيد'}<br>
+                    ${extraHtml}
+                    ${meter.completedAt ? '🕒 وقت الإنجاز: '+new Date(meter.completedAt).toLocaleString()+'<br>' : ''}
+                    ${meter.violationNumber ? '📝 رقم المخالفة: '+meter.violationNumber+'<br>' : ''}
+                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${meter.lat},${meter.lng}')" style="margin-top:5px;">🧭 التنقل</button>
+                </div>`;
+    }
+    
+    function updateMap(teams, meters) { markersLayer.clearLayers(); polygonLayer.clearLayers(); for (let t of teams) if (t.polygonCoords?.length>2) { const latlngs = t.polygonCoords.map(p=>[p.lat,p.lng]); L.polygon(latlngs, { color:'#2c3e50', weight:2, fillColor:'#3498db', fillOpacity:0.1 }).addTo(polygonLayer); } for (let m of meters) { const icon = createBalloonIcon(m); L.marker([m.lat,m.lng], { icon:icon }).addTo(markersLayer).bindPopup(buildPopupContent(m)); } }
+    function updateStats(teams, meters) { const total=meters.length, completed=meters.filter(m=>m.status==='completed').length; document.getElementById('statsCards').innerHTML = `<div class="card"><h3>${total}</h3><p>إجمالي</p></div><div class="card"><h3 style="color:#2ecc71">${completed}</h3><p>تم</p></div><div class="card"><h3 style="color:#e67e22">${total-completed}</h3><p>متبقي</p></div><div class="card"><h3>${teams.length}</h3><p>الفرق</p></div>`; }
+    function updateTeamsTable(teams, meters) { const tbody = document.querySelector('#teamsTable tbody'); tbody.innerHTML = ''; const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1); for (let team of teams) { const teamMeters = meters.filter(m => m.teamId === team.id); const completed = teamMeters.filter(m => m.status === 'completed').length; const link = `${baseUrl}team.html?token=${team.token}`; const row = tbody.insertRow(); row.insertCell(0).innerText = team.name; row.insertCell(1).innerText = teamMeters.length; row.insertCell(2).innerHTML = `<span class="completed">${completed}</span>`; row.insertCell(3).innerHTML = `<span class="pending">${teamMeters.length-completed}</span>`; row.insertCell(4).innerHTML = `<a href="${link}" target="_blank" class="team-link">🔗 رابط الفريق</a> <span class="copy-btn" onclick="navigator.clipboard.writeText('${link}'); alert('تم نسخ الرابط')">📋 نسخ</span>`; } }
+    async function refreshData() { const data = await loadFromGoogleSheets(); if (data?.teams && data?.meters) { updateMap(data.teams, data.meters); updateStats(data.teams, data.meters); updateTeamsTable(data.teams, data.meters); } else log('⚠️ لا توجد بيانات'); }
+    
+    // دوال التصدير
+    async function exportToExcel() {
+        const data = await loadFromGoogleSheets();
+        if (!data?.meters) { alert('لا توجد بيانات'); return; }
+        let order = columnOrder.length ? columnOrder : ['meterid', 'latitude', 'longitude', 'action'];
+        const allExtraKeys = new Set();
+        for (const m of data.meters) {
+            if (m.extra) Object.keys(m.extra).forEach(k => allExtraKeys.add(k));
+        }
+        for (const k of allExtraKeys) {
+            if (!order.includes(k) && k !== 'images') order.push(k);
+        }
+        if (allExtraKeys.has('images') && !order.includes('images')) order.push('images');
+        order = ensureBaseColumnsFirst(order);
+        const rows = data.meters.map(m => {
+            const row = {};
+            for (const key of order) {
+                const base = getBaseColumnName(key);
+                if (base === 'meterid') row[key] = m.meterId;
+                else if (base === 'latitude') row[key] = m.lat;
+                else if (base === 'longitude') row[key] = m.lng;
+                else if (base === 'action') row[key] = m.action;
+                else if (key.toLowerCase() === 'status') row[key] = m.status === 'completed' ? 'تم' : 'قيد';
+                else if (key.toLowerCase() === 'completedat' || key.toLowerCase() === 'completedAt') row[key] = m.completedAt || '';
+                else if (key.toLowerCase() === 'teamid' || key.toLowerCase() === 'teamId') row[key] = m.teamId || '';
+                else if (key.toLowerCase() === 'violationnumber' || key.toLowerCase() === 'violationNumber') row[key] = m.violationNumber || '';
+                else if (key === 'images') row[key] = m.extra?.images ? (Array.isArray(m.extra.images) ? m.extra.images.join('; ') : m.extra.images) : '';
+                else if (m.extra && m.extra[key] !== undefined) row[key] = m.extra[key];
+                else row[key] = '';
+            }
+            return row;
+        });
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'العدادات');
+        XLSX.writeFile(wb, `meters_${new Date().toISOString().slice(0,19)}.xlsx`);
+    }
+    
+    function exportReportToExcel() {
+        if (!lastReportData || lastReportData.length === 0) { alert('لا توجد بيانات'); return; }
+        let order = columnOrder.length ? columnOrder : ['meterid', 'latitude', 'longitude', 'action'];
+        const allExtraKeys = new Set();
+        for (const r of lastReportData) {
+            if (r.extra) Object.keys(r.extra).forEach(k => allExtraKeys.add(k));
+        }
+        for (const k of allExtraKeys) {
+            if (!order.includes(k) && k !== 'images') order.push(k);
+        }
+        if (allExtraKeys.has('images') && !order.includes('images')) order.push('images');
+        if (!order.includes('archiveTimestamp')) order.push('archiveTimestamp');
+        order = ensureBaseColumnsFirst(order);
+        const rows = lastReportData.map(r => {
+            const row = {};
+            for (const key of order) {
+                const base = getBaseColumnName(key);
+                if (base === 'meterid') row[key] = r.meterId;
+                else if (base === 'latitude') row[key] = r.lat;
+                else if (base === 'longitude') row[key] = r.lng;
+                else if (base === 'action') row[key] = r.action;
+                else if (key.toLowerCase() === 'status') row[key] = r.status === 'completed' ? 'تم' : r.status;
+                else if (key.toLowerCase() === 'completedat' || key.toLowerCase() === 'completedAt') row[key] = r.completedAt ? new Date(r.completedAt).toLocaleString() : '';
+                else if (key.toLowerCase() === 'teamid' || key.toLowerCase() === 'teamId') row[key] = r.teamId || '';
+                else if (key.toLowerCase() === 'violationnumber' || key.toLowerCase() === 'violationNumber') row[key] = r.violationNumber || '';
+                else if (key === 'images') row[key] = r.extra?.images ? (Array.isArray(r.extra.images) ? r.extra.images.join('; ') : r.extra.images) : '';
+                else if (key.toLowerCase() === 'archivetimestamp' || key.toLowerCase() === 'archiveTimestamp') row[key] = r.archiveTimestamp ? new Date(r.archiveTimestamp).toLocaleString() : '';
+                else if (r.extra && r.extra[key] !== undefined) row[key] = r.extra[key];
+                else row[key] = '';
+            }
+            return row;
+        });
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'تقرير الأرشيف');
+        XLSX.writeFile(wb, `archive_report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+    
+    // دوال أخرى
+    async function refreshAllTokens() {
+        if (!confirm('سيتم تجديد روابط الفرق. هل تريد المتابعة؟')) return;
+        try {
+            const res = await fetch(`${SCRIPT_URL}?action=refreshAllTokens`);
+            const result = await res.json();
+            if (result.success) { alert(result.message); refreshData(); }
+            else alert('فشل التجديد');
+        } catch(err) { alert('خطأ في الاتصال'); }
+    }
+    
+    async function archiveCompleted() {
+        if (!confirm('سيتم نقل جميع العدادات المكتملة إلى الأرشيف. هل تريد المتابعة؟')) return;
+        try {
+            const res = await fetch(`${SCRIPT_URL}?action=archiveCompleted`);
+            const result = await res.json();
+            if (result.archived !== undefined) { alert(`✅ ${result.message}`); refreshData(); }
+            else alert('❌ فشل الأرشفة');
+        } catch(err) { alert('خطأ في الاتصال: ' + err.message); }
+    }
+    
+    async function searchMeterHistory() {
+        const meterId = document.getElementById('searchMeterId').value.trim();
+        if (!meterId) { alert('الرجاء إدخال رقم العداد'); return; }
+        const btn = event.target;
+        btn.innerText = 'جاري البحث...';
+        btn.disabled = true;
+        try {
+            const res = await fetch(`${SCRIPT_URL}?action=searchMeterHistory&meterId=${encodeURIComponent(meterId)}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            const history = data.history || [];
+            const historyDiv = document.getElementById('historyTable');
+            const searchMapDiv = document.getElementById('searchMap');
+            if (history.length === 0) {
+                document.getElementById('searchResult').innerHTML = `<div style="color:orange;">⚠️ لا توجد سجلات للعداد ${meterId}</div>`;
+                historyDiv.style.display = 'none';
+                searchMapDiv.style.display = 'none';
+                return;
+            }
+            document.getElementById('searchResult').innerHTML = `<div style="color:green;">✅ تم العثور على ${history.length} سجل</div>`;
+            let html = `<h4>📋 تاريخ العداد ${meterId}</h4><table><thead><th>الورقة</th><th>خط العرض</th><th>خط الطول</th><th>الإجراء</th><th>الحالة</th><th>وقت الإنجاز</th><th>الفريق</th><th>رقم المخالفة</th><th>بيانات إضافية</th><th>تاريخ الأرشفة</th></thead><tbody>`;
+            let lastCoords = null;
+            for (let rec of history) {
+                html += `<tr><td>${rec.sheet}</td><td>${rec.lat||'—'}</td><td>${rec.lng||'—'}</td><td>${rec.action||'—'}</td><td>${rec.status==='completed'?'تم':(rec.status==='pending'?'قيد':rec.status)}</td><td>${rec.completedAt?new Date(rec.completedAt).toLocaleString():'—'}</td><td>${rec.teamId||'—'}</td><td>${rec.violationNumber||'—'}</td><td>${Object.entries(rec.extra||{}).map(([k,v])=>`${k}:${v}`).join(', ')}</td><td>${rec.archiveTimestamp?new Date(rec.archiveTimestamp).toLocaleString():'—'}</td></tr>`;
+                if (rec.lat && rec.lng && !isNaN(rec.lat) && !isNaN(rec.lng)) lastCoords = { lat: rec.lat, lng: rec.lng };
+            }
+            html += `</tbody></table>`;
+            historyDiv.innerHTML = html;
+            historyDiv.style.display = 'block';
+            if (lastCoords) {
+                searchMapDiv.style.display = 'block';
+                if (searchMap) searchMap.remove();
+                searchMap = L.map('searchMap').setView([lastCoords.lat, lastCoords.lng], 15);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '© OSM' }).addTo(searchMap);
+                if (searchMarker) searchMarker.remove();
+                searchMarker = L.marker([lastCoords.lat, lastCoords.lng]).addTo(searchMap).bindPopup(`<b>العداد ${meterId}</b><br>آخر إحداثيات`).openPopup();
+            } else searchMapDiv.style.display = 'none';
+        } catch(err) { alert('خطأ في البحث: '+err.message); }
+        finally { btn.innerText = '🔍 بحث'; btn.disabled = false; }
+    }
+    
+    async function generateReport() {
+        const startDate = document.getElementById('reportStartDate').value;
+        const endDate = document.getElementById('reportEndDate').value;
+        if (!startDate || !endDate) { alert('يرجى تحديد الفترة'); return; }
+        if (startDate > endDate) { alert('تاريخ البداية يجب أن يكون قبل تاريخ النهاية'); return; }
+        const btn = event.target;
+        btn.innerText = '⏳ جاري...';
+        btn.disabled = true;
+        try {
+            const res = await fetch(`${SCRIPT_URL}?action=getArchiveReport&startDate=${startDate}&endDate=${endDate}`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            lastReportData = data.rows;
+            const resultDiv = document.getElementById('reportResult');
+            const container = document.getElementById('reportTableContainer');
+            if (data.count === 0) {
+                resultDiv.innerHTML = `<div style="color:orange;">⚠️ لا توجد سجلات في هذه الفترة</div>`;
+                container.style.display = 'none';
+                document.getElementById('exportReportBtn').disabled = true;
+                return;
+            }
+            resultDiv.innerHTML = `<div style="color:green;">✅ تم العثور على ${data.count} سجل</div>`;
+            let order = columnOrder.length ? columnOrder : ['meterid', 'latitude', 'longitude', 'action'];
+            const allExtraKeys = new Set();
+            for (const r of data.rows) {
+                if (r.extra) Object.keys(r.extra).forEach(k => allExtraKeys.add(k));
+            }
+            for (const k of allExtraKeys) {
+                if (!order.includes(k) && k !== 'images') order.push(k);
+            }
+            if (allExtraKeys.has('images') && !order.includes('images')) order.push('images');
+            if (!order.includes('archiveTimestamp')) order.push('archiveTimestamp');
+            order = ensureBaseColumnsFirst(order);
+            let html = `<table><thead><tr>`;
+            for (const col of order) html += `<th>${col}</th>`;
+            html += `</tr></thead><tbody>`;
+            for (const row of data.rows) {
+                html += `<tr>`;
+                for (const col of order) {
+                    let val = '';
+                    const base = getBaseColumnName(col);
+                    if (base === 'meterid') val = row.meterId;
+                    else if (base === 'latitude') val = row.lat;
+                    else if (base === 'longitude') val = row.lng;
+                    else if (base === 'action') val = row.action;
+                    else if (col.toLowerCase() === 'status') val = row.status === 'completed' ? 'تم' : row.status;
+                    else if (col.toLowerCase() === 'completedat' || col.toLowerCase() === 'completedAt') val = row.completedAt ? new Date(row.completedAt).toLocaleString() : '';
+                    else if (col.toLowerCase() === 'teamid' || col.toLowerCase() === 'teamId') val = row.teamId;
+                    else if (col.toLowerCase() === 'violationnumber' || col.toLowerCase() === 'violationNumber') val = row.violationNumber;
+                    else if (col === 'images') val = row.extra?.images ? (Array.isArray(row.extra.images) ? row.extra.images.join('; ') : row.extra.images) : '';
+                    else if (col.toLowerCase() === 'archivetimestamp' || col.toLowerCase() === 'archiveTimestamp') val = row.archiveTimestamp ? new Date(row.archiveTimestamp).toLocaleString() : '';
+                    else if (row.extra && row.extra[col] !== undefined) val = row.extra[col];
+                    html += `<td>${val}</td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+            container.style.display = 'block';
+            document.getElementById('exportReportBtn').disabled = false;
+        } catch(err) { alert('خطأ: ' + err.message); }
+        finally { btn.innerText = '📊 استخراج التقرير'; btn.disabled = false; }
+    }
+    
+    // بدء التطبيق
+    initMap();
+    refreshData();
+    setInterval(refreshData, 10000);
+    window.fullReplace = fullReplace; window.appendOnly = appendOnly; window.searchMeterHistory = searchMeterHistory; window.archiveCompleted = archiveCompleted;
+</script>
+</body>
+</html>
